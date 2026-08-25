@@ -1,0 +1,71 @@
+# ---- PATH ----
+export PATH="$HOME/.local/bin:$PATH"
+
+# ---- Historial ----
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=100000
+SAVEHIST=100000
+
+# ---- Starship (prompt) ----
+eval "$(starship init zsh)"
+
+# ---- Plugins ----
+for _p in \
+  "$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" \
+  "$HOME/.oh-my-zsh/custom/plugins/zsh-abbr/zsh-abbr.zsh" \
+  "$HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"; do
+  [[ -f "$_p" ]] && source "$_p"
+done
+
+# ---- Opciones de zsh ----
+setopt AUTO_CD
+
+# ---- Completion ----
+autoload -Uz compinit && compinit
+
+# ---- fzf: key bindings + completion (multi-distro) ----
+for _f in \
+  "$HOME/.config/fzf/key-bindings.zsh" \
+  /usr/share/fzf/shell/key-bindings.zsh \
+  /usr/share/fzf/key-bindings.zsh \
+  /usr/share/doc/fzf/examples/key-bindings.zsh; do
+  [[ -f "$_f" ]] && source "$_f" && break
+done
+for _f in \
+  "$HOME/.config/fzf/completion.zsh" \
+  /usr/share/fzf/shell/completion.zsh \
+  /usr/share/doc/fzf/examples/completion.zsh; do
+  [[ -f "$_f" ]] && source "$_f" && break
+done
+unset _f
+
+# ---- fd para fzf (multi-distro: fd | fdfind) ----
+_FD=$(command -v fd 2>/dev/null || command -v fdfind 2>/dev/null)
+[[ -n "$_FD" ]] && export FZF_DEFAULT_COMMAND="$_FD --type f --hidden --exclude .git"
+[[ -n "$_FD" ]] && export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+unset _FD
+
+# ---- Flecha arriba/abajo inteligente ----
+autoload -Uz up-line-or-beginning-search down-line-or-beginning-search
+zle -N up-line-or-beginning-search
+zle -N down-line-or-beginning-search
+bindkey "^[[A" up-line-or-beginning-search
+bindkey "^[[B" down-line-or-beginning-search
+bindkey "^[OA" up-line-or-beginning-search
+bindkey "^[OB" down-line-or-beginning-search
+
+# ---- Aliases ----
+source "$HOME/.config/terminal-pretty/aliases.zsh"
+
+# ---- zoxide (cd inteligente) - lazy load ----
+z() { unset -f z; eval "$(zoxide init zsh)"; z "$@"; }
+
+# ---- atuin (historial sincronizado) ----
+command -v atuin >/dev/null 2>&1 && eval "$(atuin init zsh)"
+
+# ---- thefuck (corrige comandos) ----
+command -v thefuck >/dev/null 2>&1 && eval "$(thefuck --alias)"
+
+# ---- fastfetch ----
+alias ff="fastfetch --pipe false"
+command -v fastfetch >/dev/null 2>&1 && fastfetch --pipe false

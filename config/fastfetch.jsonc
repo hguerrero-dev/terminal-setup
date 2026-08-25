@@ -1,0 +1,187 @@
+{
+    "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+    "logo": {
+        "source": "Fedora_small",
+        "padding": {
+            "top": 1,
+            "right": 2
+        }
+    },
+    "display": {
+        "separator": "  ",
+        "key": {
+            "width": 17
+        },
+        "size": {
+            "maxPrefix": "GB",
+            "ndigits": 1,
+            "spaceBeforeUnit": "never"
+        },
+        "freq": {
+            "ndigits": 2,
+            "spaceBeforeUnit": "never"
+        }
+    },
+    "modules": [
+        {
+            "type": "custom",
+            "format": "╭──────────────────────────╮",
+            "outputColor": "red"
+        },
+        {
+            "type": "title",
+            "key": "│ \uF007 user",
+            "keyColor": "red",
+            "format": "{user-name}"
+        },
+        {
+            "type": "title",
+            "key": "│ 󰋜 hname",
+            "keyColor": "green",
+            "format": "{host-name}"
+        },
+        {
+            "type": "uptime",
+            "key": "│ 󰥔 uptime",
+            "keyColor": "yellow"
+        },
+        {
+            "type": "os",
+            "key": "│ 󰙲 distro",
+            "keyColor": "blue",
+            "format": "{name} {version} {arch}"
+        },
+        {
+            "type": "kernel",
+            "key": "│ 󰿠 kernel",
+            "keyColor": "magenta",
+            "format": "{release}"
+        },
+        {
+            "type": "wm",
+            "key": "│ 󱂬 wm",
+            "keyColor": "cyan",
+            "format": "{process-name}"
+        },
+        {
+            "type": "de",
+            "key": "│ 󰖲 desktop",
+            "keyColor": "white",
+            "format": "{pretty-name} {version}"
+        },
+        {
+            "type": "terminal",
+            "key": "│ 󱩾 term",
+            "keyColor": "red",
+            "format": "{pretty-name}"
+        },
+        {
+            "type": "shell",
+            "key": "│ 󰞷 shell",
+            "keyColor": "green",
+            "format": "{exe} {version}"
+        },
+        {
+            "type": "cpu",
+            "key": "│ \uF2DB cpu",
+            "keyColor": "yellow",
+            "format": "{name} ({cores-physical}C/{cores-logical}T) @ {freq-max}"
+        },
+        {
+            "type": "gpu",
+            "key": "│ 󰍛 gpu",
+            "keyColor": "cyan",
+            "format": "{name}"
+        },
+        {
+            "type": "localip",
+            "key": "│ 󰩟 ip",
+            "keyColor": "white",
+            "format": "{ipv4}"
+        },
+        {
+            "type": "packages",
+            "key": "│ 󰏖 packages",
+            "keyColor": "red",
+            "combined": true
+        },
+        {
+            "type": "terminalfont",
+            "key": "│ 󰛄 termfont",
+            "keyColor": "green",
+            "format": "{/name}{-}{/}{name}{?size} {size}{?}"
+        },
+        {
+            "type": "command",
+            "key": "│ \uF1D3 git",
+            "keyColor": "yellow",
+            "text": "git config user.name 2>/dev/null || echo 'not configured'",
+            "format": "{result}"
+        },
+        {
+            "type": "locale",
+            "key": "│ \uF0AC locale",
+            "keyColor": "blue",
+            "format": "{result}"
+        },
+        {
+            "type": "swap",
+            "key": "│ 󰓡 swap",
+            "keyColor": "magenta",
+            "format": "{used} / {total}"
+        },
+        {
+            "type": "display",
+            "key": "│ 󰍹 display",
+            "keyColor": "cyan",
+            "compactType": "original"
+        },
+        {
+            "type": "wmtheme",
+            "key": "│ 󰉼 wmtheme",
+            "keyColor": "white"
+        },
+        {
+            "type": "sound",
+            "key": "│ \uF028 sound",
+            "keyColor": "red",
+            "format": "{name} ({volume-percentage})"
+        },
+        {
+            "type": "editor",
+            "key": "│ \uF040 editor",
+            "keyColor": "green",
+            "format": "{exe-name}"
+        },
+        {
+            "type": "battery",
+            "key": "│ \uF240 battery",
+            "keyColor": "yellow",
+            "format": "{capacity} ({status})"
+        },
+        {
+            "type": "disk",
+            "key": "│ 󰋊 disk",
+            "keyColor": "blue",
+            "format": "{size-used} / {size-total} ({size-percentage})",
+            "folders": ["/"]
+        },
+        {
+            "type": "memory",
+            "key": "│ 󰑭 memory",
+            "keyColor": "magenta",
+            "format": "{used} / {total} ({percentage})"
+        },
+        {
+            "type": "custom",
+            "format": "╰──────────────────────────╯",
+            "outputColor": "red"
+        },
+        {
+            "type": "colors",
+            "key": "   colors",
+            "paddingLeft": 2,
+            "symbol": "circle"
+        }
+    ]
+}

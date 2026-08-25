@@ -1,0 +1,153 @@
+# starship - https://starship.rs/config/
+# Iconos Material Design escritos como \UXXXXXXXX para que no se pierdan
+command_timeout = 5000
+
+format = """
+[╭─](blue)$directory$git_branch$git_status$docker_context$nodejs$rust$python$php$c$cpp$golang$java$package$cmd_duration
+[╰─](blue)$username$hostname$custom$battery$time$character"""
+
+
+# ---- Directorio (compacto, con icono) ----
+[directory]
+truncation_length = 4
+truncate_to_repo = true
+style = "cyan"
+format = "[\U000F024B $path]($style) "
+
+
+# ---- Usuario de git (solo dentro de un repo) ----
+[custom.git_user]
+command = "git config user.name"
+when = "git rev-parse --is-inside-work-tree >/dev/null 2>&1"
+symbol = "\uf1d3"
+format = "[$symbol $output]($style) "
+style = "purple"
+shell = ["bash", "--noprofile", "--norc"]
+
+
+# ---- Distro (solo icono; el hostname ya indica el SO) ----
+[custom.distro]
+command = "true"
+when = "true"
+symbol = "\U000F08DB"
+format = "[$symbol]($style) "
+style = "white"
+shell = ["bash", "--noprofile", "--norc"]
+
+
+# ---- Usuario del sistema ----
+[username]
+show_always = true
+style_user = "green"
+style_root = "red"
+format = "[\U000F0004 $user]($style) "
+
+
+# ---- Hostname ----
+[hostname]
+ssh_only = false
+trim_at = "."
+style = "blue"
+format = "[\U000F030A $hostname]($style) "
+
+
+# ---- Duracion del ultimo comando (>2s) ----
+[cmd_duration]
+min_time = 2000
+format = "[\U000F051F $duration]($style) "
+style = "yellow"
+
+
+# ---- Bateria (se oculta si no hay) ----
+[battery]
+format = "[$symbol $percentage]($style) "
+full_symbol = "\U000F0079"
+charging_symbol = "\U000F0084"
+discharging_symbol = "\U000F0080"
+
+[[battery.display]]
+threshold = 20
+style = "red"
+
+[[battery.display]]
+threshold = 50
+style = "yellow"
+
+[[battery.display]]
+threshold = 100
+style = "green"
+
+
+# ---- Hora ----
+[time]
+disabled = false
+format = "[\U000F0954 $time]($style) "
+time_format = "%H:%M"
+style = "cyan"
+
+
+[docker_context]
+disabled = false
+symbol = "\U000F0868 "
+style = "blue"
+only_with_files = true
+
+
+[nodejs]
+symbol = "\U000F0399 "
+format = "via [$symbol$version](green) "
+detect_files = ["package.json", ".node-version", ".nvmrc", "pnpm-lock.yaml", "bun.lock", "bun.lockb"]
+
+
+[rust]
+symbol = "\ue7a8 "
+format = "via [$symbol$version](red) "
+
+
+[python]
+symbol = "\U000F0320 "
+format = "via [$symbol$version](yellow) "
+
+
+[php]
+symbol = "\U000F031F "
+format = "via [$symbol$version](cyan) "
+
+
+[c]
+symbol = "\U000F0671 "
+format = "via [$symbol$version](blue) "
+
+
+[cpp]
+symbol = "\U000F0672 "
+format = "via [$symbol$version](magenta) "
+
+
+[golang]
+symbol = "\U000F07CD "
+format = "via [$symbol$version](cyan) "
+
+
+[java]
+symbol = "\U000F0527 "
+format = "via [$symbol$version](red) "
+
+
+[git_branch]
+symbol = "\U000F02A2"
+format = "on [$symbol $branch](purple) "
+
+
+[git_status]
+disabled = true
+
+
+[package]
+symbol = "\U000F03D6 "
+format = "via [$symbol$version](blue) "
+
+
+[character]
+success_symbol = "[❯](green)"
+error_symbol = "[❯](red)"
