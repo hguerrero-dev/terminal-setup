@@ -7,6 +7,8 @@ SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="$HOME/.local/bin"
 CONF="$HOME/.config"
 mkdir -p "$BIN_DIR"
+# Asegurar que los binarios instalados sean visibles en esta misma sesión
+export PATH="$BIN_DIR:$PATH"
 
 # ---- Colores ----
 R='\033[0;31m' Y='\033[0;33m' G='\033[0;32m' B='\033[1m' NC='\033[0m'
@@ -52,6 +54,7 @@ pm_update() {
     dnf)    sudo dnf check-update -q || true ;;
     apt)    sudo apt-get update -qq ;;
     pacman) sudo pacman -Sy ;;
+    zypper) sudo zypper refresh -q || true ;;
   esac
 }
 
@@ -90,27 +93,46 @@ try_tool() {
 # ---- Arquitectura ----
 ARCH_HOST=$(uname -m)
 case "$ARCH_HOST" in
-  x86_64|amd64)  ARCH_GH="x86_64"; ARCH_GH_ALT="amd64" ;;
-  aarch64|arm64) ARCH_GH="aarch64"; ARCH_GH_ALT="arm64" ;;
+  x86_64|amd64)  ARCH_GH="x86_64"; ARCH_GH_ALT="amd64"; ARCH_LAZY="x86_64"; ARCH_YAZI="x86_64" ;;
+  aarch64|arm64) ARCH_GH="aarch64"; ARCH_GH_ALT="arm64"; ARCH_LAZY="arm64"; ARCH_YAZI="aarch64" ;;
   *)              err "Arquitectura no soportada: $ARCH_HOST"; exit 1 ;;
 esac
 
 # ---- Helper: latest release tag de GitHub ----
+# Nota: se ignora el exit code de curl a propósito. Con `set -o pipefail`,
+# `grep -m1` cierra el pipe antes de que curl termine (SIGPIPE → exit 23)
+# aunque el tag ya se haya recibido bien. Lo que importa es que el tag
+# no esté vacío.
 gh_tag() {
-  curl -fsSL "https://api.github.com/repos/$1/releases/latest" \
-    | grep -m1 '"tag_name"' | cut -d'"' -f4
+  local _tag
+  set +o pipefail
+  _tag=$(curl -fsSL "https://api.github.com/repos/$1/releases/latest" 2>/dev/null \
+    | grep -m1 '"tag_name"' | cut -d'"' -f4)
+  set -o pipefail
+  [[ -n "$_tag" ]] || return 1
+  printf '%s\n' "$_tag"
 }
 
 # ---- Helper: descargar tar.gz de GitHub y extraer binario(s) ----
 # dl_gh_tar <repo> <asset_pattern> <binarios...>
 dl_gh_tar() {
   local repo="$1" asset="$2"; shift 2
-  local tag; tag=$(gh_tag "$repo") || { warn "No se pudo obtener release de $repo"; return 1; }
+  local tag; tag=$(gh_tag "$repo") || { warn "No se pudo obtener release de $repo"; FAILED+=("$@"); return 1; }
   local url="https://github.com/$repo/releases/download/$tag/$asset"
   info "Descargando $repo $tag..."
   local tmpdir; tmpdir=$(mktemp -d)
-  curl -fsSL "$url" -o "$tmpdir/pkg.tar.gz" 2>/dev/null || { rm -rf "$tmpdir"; return 1; }
-  tar xzf "$tmpdir/pkg.tar.gz" -C "$tmpdir" 2>/dev/null
+  if ! curl -fsSL "$url" -o "$tmpdir/pkg.tar.gz" 2>/dev/null; then
+    warn "No se pudo descargar $url"
+    rm -rf "$tmpdir"
+    FAILED+=("$@")
+    return 1
+  fi
+  tar xzf "$tmpdir/pkg.tar.gz" -C "$tmpdir" 2>/dev/null || {
+    warn "No se pudo extraer $asset"
+    rm -rf "$tmpdir"
+    FAILED+=("$@")
+    return 1
+  }
   for bin in "$@"; do
     local found
     found=$(find "$tmpdir" -name "$bin" -type f | head -1)
@@ -131,10 +153,23 @@ info "Actualizando índices del gestor de paquetes..."
 pm_update
 
 case $PM in
-  dnf)    sudo dnf install -y -q git curl wget unzip tar gzip ca-certificates ;;
-  apt)    sudo apt-get install -y --no-install-recommends git curl wget unzip tar gzip ca-certificates ;;
-  pacman) sudo pacman -S --needed --noconfirm git curl wget unzip tar ;;
+  dnf)    sudo dnf install -y -q git curl wget unzip tar gzip ca-certificates fontconfig zsh ;;
+  apt)    sudo apt-get install -y --no-install-recommends git curl wget unzip tar gzip ca-certificates fontconfig zsh ;;
+  pacman) sudo pacman -S --needed --noconfirm git curl wget unzip tar fontconfig zsh ;;
+  zypper) sudo zypper install -y --no-confirm git curl wget unzip tar gzip ca-certificates fontconfig zsh ;;
 esac
+
+# ---- Symlinks Debian/Ubuntu (fdfind->fd, batcat->bat) ----
+if [[ "$PM" == "apt" ]]; then
+  command -v fd &>/dev/null || command -v fdfind &>/dev/null && {
+    mkdir -p "$BIN_DIR"
+    command -v fd &>/dev/null || ln -sf "$(command -v fdfind)" "$BIN_DIR/fd" 2>/dev/null || true
+  }
+  command -v bat &>/dev/null || command -v batcat &>/dev/null && {
+    mkdir -p "$BIN_DIR"
+    command -v bat &>/dev/null || ln -sf "$(command -v batcat)" "$BIN_DIR/bat" 2>/dev/null || true
+  }
+fi
 
 # ================================================================
 # 3. HERRAMIENTAS PRINCIPALES (via repos)
@@ -142,6 +177,7 @@ esac
 info "Instalando herramientas de los repos..."
 
 #                     cmd         fedora          debian              arch
+try_tool zsh          zsh          zsh              zsh
 try_tool eza          eza          eza              eza
 try_tool bat          bat          bat              bat
 try_tool fd           fd-find      fd-find          fd
@@ -163,6 +199,12 @@ try_tool tmux         tmux         tmux             tmux
 try_tool fastfetch    fastfetch    fastfetch        fastfetch
 try_tool tldr         tealdeer     tealdeer         tealdeer
 
+# ---- Symlinks post-instalación (Debian/Ubuntu renombra binarios) ----
+if [[ "$PM" == "apt" ]]; then
+  command -v fd &>/dev/null || [[ -x /usr/bin/fdfind ]] && ln -sf /usr/bin/fdfind "$BIN_DIR/fd" 2>/dev/null || true
+  command -v bat &>/dev/null || [[ -x /usr/bin/batcat ]] && ln -sf /usr/bin/batcat "$BIN_DIR/bat" 2>/dev/null || true
+fi
+
 # ================================================================
 # 4. BINARIOS DESDE GITHUB (multi-arch, siempre en BIN_DIR)
 # ================================================================
@@ -172,77 +214,122 @@ info "Descargando binarios desde GitHub..."
 if [[ ! -x "$BIN_DIR/starship" ]] && ! command -v starship &>/dev/null; then
   info "Instalando starship..."
   curl -fsSL https://starship.rs/install.sh | sh -s -- --yes --bin-dir "$BIN_DIR" 2>/dev/null || \
-    dl_gh tar starship/starship "starship-${ARCH_GH}-unknown-linux-gnu.tar.gz" starship
+    dl_gh_tar starship/starship "starship-${ARCH_GH}-unknown-linux-gnu.tar.gz" starship
 fi
 
 # ---- fastfetch (fallback si repos no lo tienen) ----
 if ! command -v fastfetch &>/dev/null && [[ ! -x "$BIN_DIR/fastfetch" ]]; then
   info "fastfetch no está en repos — descargando binario..."
-  dl_gh tar fastfetch-cli/fastfetch "fastfetch-linux-${ARCH_GH_ALT}.tar.gz" fastfetch 2>/dev/null && \
+  dl_gh_tar fastfetch-cli/fastfetch "fastfetch-linux-${ARCH_GH_ALT}.tar.gz" fastfetch 2>/dev/null && \
     sudo install -m 755 "$BIN_DIR/fastfetch" /usr/local/bin/fastfetch 2>/dev/null || true
 fi
 
-# ---- lazygit ----
-if ! command -v lazygit &>/dev/null; then
-  dl_gh_tar jesseduffield/lazygit "lazygit_${ARCH_GH_ALT}_linux_${ARCH_GH}.tar.gz" lazygit
-fi
-
-# ---- lazydocker ----
-if ! command -v lazydocker &>/dev/null; then
-  dl_gh_tar jesseduffield/lazydocker "lazydocker_Linux_${ARCH_GH}.tar.gz" lazydocker
-fi
-
-# ---- yazi ----
-if ! command -v yazi &>/dev/null; then
-  info "Descargando yazi..."
-  YAZI_VER=$(gh_tag sxyazi/yazi) || true
-  if [[ -n "$YAZI_VER" ]]; then
-    curl -fsSL "https://github.com/sxyazi/yazi/releases/download/${YAZI_VER}/yazi-x86_64-unknown-linux-gnu.zip" \
-      -o /tmp/yazi.zip 2>/dev/null && \
-    unzip -qo /tmp/yazi.zip -d /tmp/yazi 2>/dev/null && \
-    cp /tmp/yazi/yazi-*/{yazi,ya} "$BIN_DIR/" 2>/dev/null
-    rm -rf /tmp/yazi /tmp/yazi.zip
+# ---- lazygit (asset: lazygit_<VER-sin-v>_linux_<x86_64|arm64>.tar.gz) ----
+if ! command -v lazygit &>/dev/null && [[ ! -x "$BIN_DIR/lazygit" ]]; then
+  LAZY_TAG=$(gh_tag jesseduffield/lazygit) || LAZY_TAG=""
+  if [[ -n "$LAZY_TAG" ]]; then
+    dl_gh_tar jesseduffield/lazygit "lazygit_${LAZY_TAG#v}_linux_${ARCH_LAZY}.tar.gz" lazygit || true
+  else
+    warn "No se pudo obtener release de lazygit"
+    FAILED+=("lazygit")
   fi
 fi
 
-# ---- doggo ----
-if ! command -v doggo &>/dev/null; then
-  dl_gh_tar mr-karan/doggo "doggo-linux-${ARCH_GH}.tar.gz" doggo
+# ---- lazydocker (asset: lazydocker_<VER-sin-v>_Linux_<x86_64|arm64>.tar.gz) ----
+if ! command -v lazydocker &>/dev/null && [[ ! -x "$BIN_DIR/lazydocker" ]]; then
+  LZD_TAG=$(gh_tag jesseduffield/lazydocker) || LZD_TAG=""
+  if [[ -n "$LZD_TAG" ]]; then
+    dl_gh_tar jesseduffield/lazydocker "lazydocker_${LZD_TAG#v}_Linux_${ARCH_LAZY}.tar.gz" lazydocker || true
+  else
+    warn "No se pudo obtener release de lazydocker"
+    FAILED+=("lazydocker")
+  fi
 fi
 
-# ---- bandwhich ----
-if ! command -v bandwhich &>/dev/null; then
-  dl_gh_tar imsnif/bandwhich "bandwhich-$(gh_tag imsnif/bandwhich)-${ARCH_GH}-unknown-linux-gnu.tar.gz" bandwhich
+# ---- yazi ----
+if ! command -v yazi &>/dev/null && [[ ! -x "$BIN_DIR/yazi" ]]; then
+  info "Descargando yazi..."
+  YAZI_VER=$(gh_tag sxyazi/yazi) || true
+  if [[ -n "$YAZI_VER" ]]; then
+    YAZI_TMP=$(mktemp -d)
+    if curl -fsSL "https://github.com/sxyazi/yazi/releases/download/${YAZI_VER}/yazi-${ARCH_YAZI}-unknown-linux-gnu.zip" \
+      -o "$YAZI_TMP/yazi.zip" 2>/dev/null && \
+       unzip -qo "$YAZI_TMP/yazi.zip" -d "$YAZI_TMP" 2>/dev/null; then
+      YAZI_BIN=$(find "$YAZI_TMP" -name yazi -type f | head -1)
+      YA_BIN=$(find "$YAZI_TMP" -name ya -type f | head -1)
+      [[ -n "$YAZI_BIN" ]] && install -m 755 "$YAZI_BIN" "$BIN_DIR/yazi"
+      [[ -n "$YA_BIN" ]] && install -m 755 "$YA_BIN" "$BIN_DIR/ya"
+      [[ -z "$YAZI_BIN" ]] && { warn "Binario yazi no encontrado en el zip"; FAILED+=("yazi"); }
+    else
+      warn "No se pudo descargar yazi ${YAZI_VER}"
+      FAILED+=("yazi")
+    fi
+    rm -rf "$YAZI_TMP"
+  else
+    warn "No se pudo obtener release de yazi"
+    FAILED+=("yazi")
+  fi
+fi
+
+# ---- doggo (asset: doggo-linux-<x86_64|aarch64>.tar.gz) ----
+if ! command -v doggo &>/dev/null && [[ ! -x "$BIN_DIR/doggo" ]]; then
+  dl_gh_tar mr-karan/doggo "doggo-linux-${ARCH_GH}.tar.gz" doggo || true
+fi
+
+# ---- bandwhich (asset: bandwhich-<TAG-con-v>-<arch>-unknown-linux-gnu.tar.gz) ----
+if ! command -v bandwhich &>/dev/null && [[ ! -x "$BIN_DIR/bandwhich" ]]; then
+  BW_TAG=$(gh_tag imsnif/bandwhich) || BW_TAG=""
+  if [[ -n "$BW_TAG" ]]; then
+    dl_gh_tar imsnif/bandwhich "bandwhich-${BW_TAG}-${ARCH_GH}-unknown-linux-gnu.tar.gz" bandwhich || true
+  else
+    warn "No se pudo obtener release de bandwhich"
+    FAILED+=("bandwhich")
+  fi
   # Permite capturar tráfico sin sudo
-  sudo setcap 'cap_net_raw,cap_net_admin+eip' "$BIN_DIR/bandwhich" 2>/dev/null || true
+  [[ -x "$BIN_DIR/bandwhich" ]] && sudo setcap 'cap_net_raw,cap_net_admin+eip' "$BIN_DIR/bandwhich" 2>/dev/null || true
 fi
 
 # ================================================================
 # 5. FUENTES NERD FONTS
 # ================================================================
-if ! fc-list 2>/dev/null | grep -q "CaskaydiaCove Nerd"; then
-  info "Descargando CaskaydiaCove Nerd Font..."
-  CURL=$(curl -fsSL "https://api.github.com/repos/ryanoasis/nerd-fonts/releases/latest" \
-    | grep -m1 '"tag_name"' | cut -d'"' -f4)
-  FONT_DIR=$(mktemp -d)
-  curl -fsSL "https://github.com/ryanoasis/nerd-fonts/releases/download/${CURL}/CascadiaCode.tar.xz" \
-    -o "$FONT_DIR/fonts.tar.xz" && \
-  tar xJf "$FONT_DIR/fonts.tar.xz" -C "$FONT_DIR" --wildcards '*.ttf' && \
-  mkdir -p "$HOME/.local/share/fonts/CaskaydiaNF" && \
-  mv "$FONT_DIR"/*.ttf "$HOME/.local/share/fonts/CaskaydiaNF/" 2>/dev/null && \
-  fc-cache -f "$HOME/.local/share/fonts/CaskaydiaNF/" && \
-  info "Fuentes instaladas ✓" || warn "Error al instalar fuentes"
-  rm -rf "$FONT_DIR"
-else
+# Sin -q: con `set -o pipefail`, `grep -q` cierra el pipe antes de que
+# fc-list termine (SIGPIPE) y la tubería reportaría fallo aunque haya match.
+if [[ -n "$(fc-list 2>/dev/null | grep 'CaskaydiaCove Nerd' || true)" ]]; then
   info "CaskaydiaCove Nerd Font ya instalada ✓"
+else
+  info "Descargando CaskaydiaCove Nerd Font..."
+  CURL=$(gh_tag ryanoasis/nerd-fonts) || CURL=""
+  FONT_DIR=$(mktemp -d)
+  if [[ -z "$CURL" ]]; then
+    warn "No se pudo obtener release de nerd-fonts"
+    FAILED+=("nerd-fonts")
+  elif curl -fsSL "https://github.com/ryanoasis/nerd-fonts/releases/download/${CURL}/CascadiaCode.tar.xz" \
+    -o "$FONT_DIR/fonts.tar.xz" && \
+    tar xJf "$FONT_DIR/fonts.tar.xz" -C "$FONT_DIR" --wildcards '*.ttf' && \
+    mkdir -p "$HOME/.local/share/fonts/CaskaydiaNF" && \
+    find "$FONT_DIR" -name '*.ttf' -exec mv {} "$HOME/.local/share/fonts/CaskaydiaNF/" \; && \
+    fc-cache -f "$HOME/.local/share/fonts/CaskaydiaNF/"; then
+    info "Fuentes instaladas ✓"
+  else
+    warn "Error al instalar fuentes"
+    FAILED+=("nerd-fonts")
+  fi
+  rm -rf "$FONT_DIR"
 fi
 
 # ================================================================
 # 6. ZSH + OH MY ZSH + PLUGINS
 # ================================================================
-if [[ "$SHELL" != "$(command -v zsh)" ]]; then
-  info "Cambiando shell por defecto a zsh..."
-  chsh -s "$(command -v zsh)" 2>/dev/null && info "Shell cambiado ✓" || warn "No se pudo cambiar shell. Ejecuta manualmente: chsh -s \$(which zsh)"
+if command -v zsh &>/dev/null; then
+  if [[ "$SHELL" != "$(command -v zsh)" ]]; then
+    info "Cambiando shell por defecto a zsh..."
+    chsh -s "$(command -v zsh)" 2>/dev/null && info "Shell cambiado ✓ (aplica en el próximo login)" || warn "No se pudo cambiar shell. Ejecuta manualmente: chsh -s \$(which zsh)"
+  else
+    info "zsh ya es el shell por defecto ✓"
+  fi
+else
+  warn "zsh no está instalado, no se puede cambiar el shell por defecto"
+  FAILED+=("zsh")
 fi
 
 if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
@@ -369,7 +456,13 @@ echo ""
 
 if [[ ${#FAILED[@]} -gt 0 ]]; then
   printf "${Y}⚠️  Estas herramientas no se pudieron instalar (puedes instalarlas manualmente):${NC}\n"
-  for f in "${FAILED[@]}"; do printf "   ${R}✗${NC} $f\n"; done
+  _seen=""
+  for f in "${FAILED[@]}"; do
+    [[ "$_seen" == *"|$f|"* ]] && continue
+    _seen+="|$f|"
+    printf "   ${R}✗${NC} $f\n"
+  done
+  unset _seen
   echo ""
 fi
 
