@@ -404,6 +404,18 @@ if command -v konsole &>/dev/null || [[ -d "$HOME/.local/share/konsole" ]]; then
   backup_and_copy "$SRC_DIR/konsole/Nerd.profile"              "$HOME/.local/share/konsole/Nerd.profile"
   backup_and_copy "$SRC_DIR/konsole/Transparent.colorscheme"   "$HOME/.local/share/konsole/Transparent.colorscheme"
 
+  # Fuerza zsh como comando del perfil (ignora shells viejos cacheados por Konsole)
+  if command -v zsh &>/dev/null; then
+    _zsh_bin="$(command -v zsh)"
+    _nerd_prof="$HOME/.local/share/konsole/Nerd.profile"
+    if grep -q '^Command=' "$_nerd_prof"; then
+      sed -i "s|^Command=.*|Command=$_zsh_bin|" "$_nerd_prof"
+    else
+      sed -i "/^\[General\]/a Command=$_zsh_bin" "$_nerd_prof"
+    fi
+    unset _zsh_bin _nerd_prof
+  fi
+
   KRC="$HOME/.config/konsolerc"
   mkdir -p "$(dirname "$KRC")"
   [[ ! -f "$KRC" ]] && printf '[General]\nConfigVersion=1\n\n[UiSettings]\nColorScheme=\n' > "$KRC"
