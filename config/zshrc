@@ -65,8 +65,10 @@ z() { unset -f z; eval "$(zoxide init zsh)"; z "$@"; }
 # ---- atuin (historial sincronizado) ----
 command -v atuin >/dev/null 2>&1 && eval "$(atuin init zsh)"
 
-# ---- thefuck (corrige comandos) ----
-command -v thefuck >/dev/null 2>&1 && eval "$(thefuck --alias)"
+# ---- thefuck (corrige comandos) - lazy load: evita ~180ms de Python en cada inicio ----
+if command -v thefuck >/dev/null 2>&1; then
+  fuck() { unset -f fuck; eval "$(thefuck --alias)"; fuck "$@"; }
+fi
 
 # ---- fastfetch ----
 alias ff="fastfetch --pipe false"
