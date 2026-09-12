@@ -220,7 +220,7 @@ fi
 # ---- fastfetch (fallback si repos no lo tienen) ----
 if ! command -v fastfetch &>/dev/null && [[ ! -x "$BIN_DIR/fastfetch" ]]; then
   info "fastfetch no está en repos — descargando binario..."
-  dl_gh_tar fastfetch-cli/fastfetch "fastfetch-linux-${ARCH_GH_ALT}.tar.gz" fastfetch 2>/dev/null && \
+  dl_gh_tar fastfetch-cli/fastfetch "fastfetch-linux-${ARCH_GH_ALT}.tar.gz" fastfetch && \
     sudo install -m 755 "$BIN_DIR/fastfetch" /usr/local/bin/fastfetch 2>/dev/null || true
 fi
 
@@ -419,7 +419,12 @@ if command -v konsole &>/dev/null || [[ -d "$HOME/.local/share/konsole" ]]; then
   KRC="$HOME/.config/konsolerc"
   mkdir -p "$(dirname "$KRC")"
   [[ ! -f "$KRC" ]] && printf '[General]\nConfigVersion=1\n\n[UiSettings]\nColorScheme=\n' > "$KRC"
-  if ! grep -q '^DefaultProfile=' "$KRC"; then
+  if grep -q '^DefaultProfile=Nerd\.profile' "$KRC"; then
+    : # ya es el nuestro
+  elif grep -q '^DefaultProfile=' "$KRC"; then
+    info "Cambiando perfil por defecto de Konsole a Nerd.profile..."
+    sed -i 's|^DefaultProfile=.*|DefaultProfile=Nerd.profile|' "$KRC"
+  else
     printf '\n[Desktop Entry]\nDefaultProfile=Nerd.profile\n' >> "$KRC"
   fi
 fi
@@ -461,6 +466,38 @@ command -v tldr &>/dev/null && info "Actualizando cache de tldr..." && tldr -u 2
 rm -f "$HOME/.zcompdump"* 2>/dev/null
 
 # ================================================================
+# 10. VERIFICACIÓN (para que un fallo sea visible, no un "no veo cambios")
+# ================================================================
+echo ""
+printf "${B}--- Verificación ---${NC}\n"
+_check_ok=0; _check_fail=0
+check() { # check <descripcion> <comando...>
+  local desc="$1"; shift
+  if "$@" &>/dev/null; then
+    printf "   ${G}✓${NC} %s\n" "$desc"; _check_ok=$((_check_ok+1))
+  else
+    printf "   ${R}✗${NC} %s\n" "$desc"; _check_fail=$((_check_fail+1))
+  fi
+}
+check "zsh instalado" command -v zsh
+check "starship en PATH" sh -c 'export PATH="$HOME/.local/bin:$PATH"; command -v starship'
+check "starship renderiza con tu config" sh -c 'export PATH="$HOME/.local/bin:$PATH"; STARSHIP_CONFIG="$HOME/.config/starship.toml" starship prompt'
+check "lazygit" sh -c 'export PATH="$HOME/.local/bin:$PATH"; command -v lazygit'
+check "lazydocker" sh -c 'export PATH="$HOME/.local/bin:$PATH"; command -v lazydocker'
+check "doggo" sh -c 'export PATH="$HOME/.local/bin:$PATH"; command -v doggo'
+check "bandwhich" sh -c 'export PATH="$HOME/.local/bin:$PATH"; command -v bandwhich'
+check "yazi" sh -c 'export PATH="$HOME/.local/bin:$PATH"; command -v yazi'
+check "~/.zshrc instalado" test -f "$HOME/.zshrc"
+check "starship.toml instalado" test -f "$HOME/.config/starship.toml"
+check "CaskaydiaCove Nerd Font" sh -c 'fc-list 2>/dev/null | grep -q "CaskaydiaCove Nerd"'
+check "perfil Nerd.profile con zsh" grep -q '^Command=.*zsh' "$HOME/.local/share/konsole/Nerd.profile"
+check "Nerd.profile por defecto" grep -q '^DefaultProfile=Nerd\.profile' "$HOME/.config/konsolerc"
+printf "Verificación: %s OK, %s con fallo\n" "$_check_ok" "$_check_fail"
+[[ "$_check_fail" -gt 0 ]] && warn "Revisa los ✗ de arriba antes de cerrar esta terminal."
+unset _check_ok _check_fail
+unset -f check
+
+# ================================================================
 # RESUMEN
 # ================================================================
 echo ""
@@ -481,9 +518,13 @@ if [[ ${#FAILED[@]} -gt 0 ]]; then
   echo ""
 fi
 
-printf "${G}Próximos pasos:${NC}\n"
-echo "  1. Abre una NUEVA ventana de Konsole / terminal"
-echo "  2. Si usas Konsole, ajusta la transparencia editando:"
+printf "${G}Próximos pasos (importante, si no NO verás cambios):${NC}\n"
+echo "  1. Cierra Konsole POR COMPLETO (kquitapp6 konsole) y vuelve a abrirlo."
+echo "     Una ventana/pestaña nueva NO basta: el proceso cachea los perfiles."
+echo "  2. Si se cambió tu shell, cierra sesión y entra de nuevo (chsh aplica al login)."
+echo "  3. Verifica con: echo \"perfil=\$KONSOLE_PROFILE_NAME shell=\$0\""
+echo "     Debe mostrar tu zsh. Si algo falla, el bloque 'Verificación' de arriba dice qué."
+echo "  4. Ajusta la transparencia editando:"
 echo "     ~/.local/share/konsole/Transparent.colorscheme"
 echo "     (cambia el último número en Color=r,g,b,ALPHA — menor = más transparente)"
 echo ""

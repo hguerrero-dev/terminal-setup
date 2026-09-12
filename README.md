@@ -43,10 +43,12 @@ cd terminal-pretty
 
 El script usa sudo internamente para instalar paquetes. **No lo ejecutes con sudo directamente.**
 
-Al finalizar:
-1. Abre una nueva ventana de terminal / Konsole
-2. Ajusta la transparencia editando `~/.local/share/konsole/Transparent.colorscheme` (cambia el último número de `Color=26,27,38,ALPHA` — menor = más transparente)
-3. Ejecuta `tldr -u` para caché de ejemplos de comandos
+Al finalizar (importante, si no NO verás cambios):
+1. Cierra Konsole **por completo** (`kquitapp6 konsole`) y vuelve a abrirlo — una ventana/pestaña nueva no basta porque el proceso cachea los perfiles
+2. Si el script cambió tu shell, cierra sesión y entra de nuevo (`chsh` aplica al login)
+3. Verifica con: `echo "perfil=$KONSOLE_PROFILE_NAME shell=$0"` (debe mostrar tu zsh). El propio script imprime un bloque `Verificación` con ✓/✗
+4. Ajusta la transparencia editando `~/.local/share/konsole/Transparent.colorscheme` (cambia el último número de `Color=26,27,38,ALPHA` — menor = más transparente)
+5. Ejecuta `tldr -u` para caché de ejemplos de comandos
 
 ## Estructura
 
