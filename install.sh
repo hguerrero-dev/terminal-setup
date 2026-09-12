@@ -344,7 +344,7 @@ clone_plugin() {
   local repo="$1" name="$2"
   if [[ ! -d "$ZSH_CUSTOM/plugins/$name" ]]; then
     info "Clonando $name..."
-    git clone --depth=1 -q "https://github.com/$repo" "$ZSH_CUSTOM/plugins/$name" 2>/dev/null || true
+    git clone --depth=1 --recurse-submodules -q "https://github.com/$repo" "$ZSH_CUSTOM/plugins/$name" 2>/dev/null || true
   fi
 }
 
@@ -352,10 +352,13 @@ clone_plugin zsh-users/zsh-autosuggestions    zsh-autosuggestions
 clone_plugin zsh-users/zsh-syntax-highlighting zsh-syntax-highlighting
 clone_plugin olets/zsh-abbr                    zsh-abbr
 
-# Corrección: el submodule de zsh-abbr
-if [[ -d "$ZSH_CUSTOM/plugins/zsh-abbr/.gitmodules" && ! -d "$ZSH_CUSTOM/plugins/zsh-abbr/zsh-job-queue" ]]; then
-  info "Descargando submodule de zsh-abbr..."
-  git -C "$ZSH_CUSTOM/plugins/zsh-abbr" submodule update --init --recursive 2>/dev/null || true
+# Corrección: el submodule de zsh-abbr (.gitmodules es un archivo, no un directorio)
+# También repara clones viejos hechos sin --recurse-submodules.
+if [[ -f "$ZSH_CUSTOM/plugins/zsh-abbr/.gitmodules" ]]; then
+  if [[ ! -f "$ZSH_CUSTOM/plugins/zsh-abbr/zsh-job-queue/zsh-job-queue.plugin.zsh" ]]; then
+    info "Descargando submodule de zsh-abbr..."
+    git -C "$ZSH_CUSTOM/plugins/zsh-abbr" submodule update --init --recursive 2>/dev/null || true
+  fi
 fi
 
 # ================================================================
