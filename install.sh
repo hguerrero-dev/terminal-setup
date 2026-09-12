@@ -9,6 +9,7 @@ CONF="$HOME/.config"
 mkdir -p "$BIN_DIR"
 # Asegurar que los binarios instalados sean visibles en esta misma sesión
 export PATH="$BIN_DIR:$PATH"
+[[ -d "$HOME/.cargo/bin" ]] && export PATH="$HOME/.cargo/bin:$PATH"
 
 # ---- Colores ----
 R='\033[0;31m' Y='\033[0;33m' G='\033[0;32m' B='\033[1m' NC='\033[0m'
@@ -59,9 +60,10 @@ pm_update() {
 }
 
 # ---- Instalar herramienta o fallar con warning ----
+# try_tool <cmd> <fedora_pkg> <debian_pkg> <arch_pkg> [suse_pkg]
 try_tool() {
   local cmd="$1"
-  local fedora_pkg="${2:-}" debian_pkg="${3:-}" arch_pkg="${4:-}"
+  local fedora_pkg="${2:-}" debian_pkg="${3:-}" arch_pkg="${4:-}" suse_pkg="${5:-${2:-}}"
   command -v "$cmd" &>/dev/null && return 0
 
   local pkg=""
@@ -69,7 +71,7 @@ try_tool() {
     dnf)    pkg="$fedora_pkg" ;;
     apt)    pkg="$debian_pkg" ;;
     pacman) pkg="$arch_pkg" ;;
-    zypper) pkg="$fedora_pkg" ;;  # openSUSE suele usar nombres similares a Fedora
+    zypper) pkg="$suse_pkg" ;;
   esac
 
   if [[ -z "$pkg" || "$pkg" == "-" ]]; then
@@ -180,7 +182,7 @@ info "Instalando herramientas de los repos..."
 try_tool zsh          zsh          zsh              zsh
 try_tool eza          eza          eza              eza
 try_tool bat          bat          bat              bat
-try_tool fd           fd-find      fd-find          fd
+try_tool fd           fd-find      fd-find          fd                  fd
 try_tool fzf          fzf          fzf              fzf
 try_tool zoxide       zoxide       zoxide           zoxide
 try_tool rg           ripgrep      ripgrep          ripgrep
@@ -206,7 +208,70 @@ if [[ "$PM" == "apt" ]]; then
 fi
 
 # ================================================================
-# 4. BINARIOS DESDE GITHUB (multi-arch, siempre en BIN_DIR)
+# 4. LENGUAJES, RUNTIMES Y DOCKER (vía repos del sistema + rustup)
+# ================================================================
+info "Instalando lenguajes, runtimes y Docker..."
+
+#                     cmd         fedora                    debian          arch          suse
+try_tool node         nodejs                    nodejs          nodejs        nodejs
+try_tool npm          npm                       npm             npm           npm
+try_tool python3      python3                   python3         python        python3
+try_tool pip3         python3-pip               python3-pip     python-pip    python3-pip
+try_tool gcc          gcc                       build-essential gcc           gcc
+try_tool g++          gcc-c++                   build-essential gcc           gcc-c++
+try_tool make         make                      build-essential make          make
+try_tool php          php-cli                   php-cli         php           php8-cli
+try_tool go           golang                    golang-go       go            go
+try_tool java         java-latest-openjdk-devel default-jdk     jdk-openjdk   java-21-openjdk-devel
+try_tool javac        java-latest-openjdk-devel default-jdk     jdk-openjdk   java-21-openjdk-devel
+
+# ---- Rust (rustup oficial; no hay paquete fiable en todas las distros) ----
+if ! command -v rustc &>/dev/null && ! command -v cargo &>/dev/null; then
+  info "Instalando Rust via rustup..."
+  _rustup_sh="$(mktemp)"
+  if curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o "$_rustup_sh" 2>/dev/null \
+     && sh "$_rustup_sh" -y --profile minimal --default-toolchain stable; then
+    # shellcheck disable=SC1091
+    [[ -f "$HOME/.cargo/env" ]] && . "$HOME/.cargo/env"
+    info "Rust instalado ✓"
+  else
+    warn "No se pudo instalar rustup"
+    FAILED+=("rustc" "cargo")
+  fi
+  rm -f "$_rustup_sh"
+  unset _rustup_sh
+else
+  info "Rust ya instalado ✓"
+fi
+
+# ---- Docker engine + compose ----
+if ! command -v docker &>/dev/null; then
+  info "Instalando Docker engine..."
+  case $PM in
+    dnf)    pm_install moby-engine docker-compose || true ;;
+    apt)    pm_install docker.io || true
+            pm_install docker-compose-plugin || pm_install docker-compose || true ;;
+    pacman) pm_install docker docker-compose || true ;;
+    zypper) pm_install docker docker-compose || true ;;
+  esac
+fi
+if command -v docker &>/dev/null; then
+  docker compose version &>/dev/null || warn "docker compose no disponible (solo engine)"
+  sudo systemctl enable --now docker 2>/dev/null \
+    && info "Servicio docker activado ✓" \
+    || warn "Activa docker manualmente: sudo systemctl enable --now docker"
+  if [[ -n "${USER:-}" ]] && ! id -nG "$USER" 2>/dev/null | grep -qw docker; then
+    sudo usermod -aG docker "$USER" 2>/dev/null \
+      && warn "Se agregó $USER al grupo docker: cierra sesión y entra de nuevo para usar docker sin sudo." \
+      || warn "No se pudo agregar $USER al grupo docker."
+  fi
+else
+  warn "Docker no se pudo instalar"
+  FAILED+=("docker")
+fi
+
+# ================================================================
+# 5. BINARIOS DESDE GITHUB (multi-arch, siempre en BIN_DIR)
 # ================================================================
 info "Descargando binarios desde GitHub..."
 
@@ -290,7 +355,7 @@ if ! command -v bandwhich &>/dev/null && [[ ! -x "$BIN_DIR/bandwhich" ]]; then
 fi
 
 # ================================================================
-# 5. FUENTES NERD FONTS
+# 6. FUENTES NERD FONTS
 # ================================================================
 # Sin -q: con `set -o pipefail`, `grep -q` cierra el pipe antes de que
 # fc-list termine (SIGPIPE) y la tubería reportaría fallo aunque haya match.
@@ -318,7 +383,7 @@ else
 fi
 
 # ================================================================
-# 6. ZSH + OH MY ZSH + PLUGINS
+# 7. ZSH + OH MY ZSH + PLUGINS
 # ================================================================
 if command -v zsh &>/dev/null; then
   if [[ "$SHELL" != "$(command -v zsh)" ]]; then
@@ -362,7 +427,7 @@ if [[ -f "$ZSH_CUSTOM/plugins/zsh-abbr/.gitmodules" ]]; then
 fi
 
 # ================================================================
-# 7. COPIAR CONFIGURACIONES
+# 8. COPIAR CONFIGURACIONES
 # ================================================================
 info "Copiando configuraciones..."
 
@@ -430,22 +495,26 @@ if command -v konsole &>/dev/null || [[ -d "$HOME/.local/share/konsole" ]]; then
 fi
 
 # ================================================================
-# 8. GIT GLOBAL CONFIG
+# 9. GIT GLOBAL CONFIG
 # ================================================================
 info "Configurando git..."
+_cur_name="$(git config --global user.name 2>/dev/null || true)"
+_cur_email="$(git config --global user.email 2>/dev/null || true)"
 if [[ -t 0 ]]; then
-  read -rp "  Git user name [hguerrero-dev]: " GIT_NAME
-  GIT_NAME="${GIT_NAME:-hguerrero-dev}"
-  read -rp "  Git email   [hguerrero.dev@proton.me]: " GIT_EMAIL
-  GIT_EMAIL="${GIT_EMAIL:-hguerrero.dev@proton.me}"
+  read -rp "  Git user name [${_cur_name:-hguerrero-dev}]: " GIT_NAME
+  GIT_NAME="${GIT_NAME:-${_cur_name:-hguerrero-dev}}"
+  read -rp "  Git email   [${_cur_email:-hguerrero.dev@proton.me}]: " GIT_EMAIL
+  GIT_EMAIL="${GIT_EMAIL:-${_cur_email:-hguerrero.dev@proton.me}}"
 else
-  GIT_NAME="${GIT_NAME:-hguerrero-dev}"
-  GIT_EMAIL="${GIT_EMAIL:-hguerrero.dev@proton.me}"
+  GIT_NAME="${GIT_NAME:-${_cur_name:-hguerrero-dev}}"
+  GIT_EMAIL="${GIT_EMAIL:-${_cur_email:-hguerrero.dev@proton.me}}"
 fi
+unset _cur_name _cur_email
 
-[[ -z "$(git config --global user.name 2>/dev/null)" ]] && git config --global user.name  "$GIT_NAME"
-[[ -z "$(git config --global user.email 2>/dev/null)" ]] && git config --global user.email "$GIT_EMAIL"
+git config --global user.name "$GIT_NAME"
+git config --global user.email "$GIT_EMAIL"
 git config --global init.defaultBranch main 2>/dev/null
+info "Git identity: $GIT_NAME <$GIT_EMAIL>"
 
 # ---- Git delta (diff con colores) ----
 if command -v delta &>/dev/null; then
@@ -457,7 +526,7 @@ if command -v delta &>/dev/null; then
 fi
 
 # ================================================================
-# 9. POST-INSTALACION
+# 10. POST-INSTALACION
 # ================================================================
 # ---- tealdeer cache ----
 command -v tldr &>/dev/null && info "Actualizando cache de tldr..." && tldr -u 2>/dev/null || true
@@ -466,7 +535,7 @@ command -v tldr &>/dev/null && info "Actualizando cache de tldr..." && tldr -u 2
 rm -f "$HOME/.zcompdump"* 2>/dev/null
 
 # ================================================================
-# 10. VERIFICACIÓN (para que un fallo sea visible, no un "no veo cambios")
+# 11. VERIFICACIÓN (para que un fallo sea visible, no un "no veo cambios")
 # ================================================================
 echo ""
 printf "${B}--- Verificación ---${NC}\n"
@@ -487,6 +556,18 @@ check "lazydocker" sh -c 'export PATH="$HOME/.local/bin:$PATH"; command -v lazyd
 check "doggo" sh -c 'export PATH="$HOME/.local/bin:$PATH"; command -v doggo'
 check "bandwhich" sh -c 'export PATH="$HOME/.local/bin:$PATH"; command -v bandwhich'
 check "yazi" sh -c 'export PATH="$HOME/.local/bin:$PATH"; command -v yazi'
+check "node" command -v node
+check "npm" command -v npm
+check "python3" command -v python3
+check "gcc" command -v gcc
+check "g++" command -v g++
+check "make" command -v make
+check "go" command -v go
+check "java" command -v java
+check "php" command -v php
+check "rustc" sh -c 'export PATH="$HOME/.cargo/bin:$PATH"; command -v rustc'
+check "cargo" sh -c 'export PATH="$HOME/.cargo/bin:$PATH"; command -v cargo'
+check "docker" command -v docker
 check "~/.zshrc instalado" test -f "$HOME/.zshrc"
 check "starship.toml instalado" test -f "$HOME/.config/starship.toml"
 check "CaskaydiaCove Nerd Font" sh -c 'fc-list 2>/dev/null | grep -q "CaskaydiaCove Nerd"'

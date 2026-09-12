@@ -20,8 +20,8 @@ Instalador multi-distro que configura una terminal moderna, funcional y estétic
 | Busqueda | ripgrep (grep rápido), fd (find rápido), tealdeer (tldr rápido) |
 | Git | lazygit (TUI), delta (diff con colores), GitHub CLI |
 | Prompt | starship (minimalista + info completa) |
-| Lenguajes | nodejs, python, rust, php, c, c++, go, java (auto-detectados por directorio) |
-| Docker | lazydocker (TUI), docker compose aliases |
+| Lenguajes | nodejs + npm, python3 + pip, gcc/g++/make, php, go, java (JDK), rust (rustup) — instalados vía gestor; starship los detecta por directorio |
+| Docker | docker engine + compose (servicio activado, usuario agregado al grupo), lazydocker (TUI), docker compose aliases |
 | Calidad de vida | thefuck (corrige comandos), trash-cli (rm seguro), atuin (historial sincronizado) |
 | Monitoreo | procs, bandwhich (red en tiempo real), tokei (líneas de código), hyperfine (benchmarks) |
 | Terminal | tmux, fastfetch, httpie, pv, progress |
