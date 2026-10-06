@@ -70,6 +70,18 @@ if command -v thefuck >/dev/null 2>&1; then
   fuck() { unset -f fuck; eval "$(thefuck --alias)"; fuck "$@"; }
 fi
 
+# ---- Editor por defecto ----
+if command -v vim >/dev/null 2>&1; then
+  export EDITOR=vim
+elif command -v nvim >/dev/null 2>&1; then
+  export EDITOR=nvim
+elif command -v nano >/dev/null 2>&1; then
+  export EDITOR=nano
+else
+  export EDITOR=vi
+fi
+export VISUAL="$EDITOR"
+
 # ---- fastfetch ----
 alias ff="fastfetch --pipe false"
 command -v fastfetch >/dev/null 2>&1 && fastfetch --pipe false
